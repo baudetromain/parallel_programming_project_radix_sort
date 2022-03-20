@@ -3,14 +3,19 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
+#include <time.h>
 
 
+void radix_sort(int*);
+int* initialize_array();
+void print_array(int*);
 void scan_args(int, char**);
 int open_output_file(char*);
 int open_input_file(char*);
 void close_file_descriptors();
 void print_usage(char*);
 void print_args();
+void my_exit(int);
 
 
 int N = 0;
@@ -28,8 +33,82 @@ int main(int argc, char** argv)
 	scan_args(argc, argv);
 	print_args();
 
+	int* array = initialize_array();
+	print_array(array);
+	radix_sort(array);
+	print_array(array);
+
 	close_file_descriptors();
+	free(array);
 	return 0;
+}
+
+void radix_sort(int* array)
+{
+
+}
+
+int* initialize_array()
+{
+	int* array = malloc(ARRAY_SIZE * sizeof(int));
+
+	if (INPUT_FILE_DESCRIPTOR > 0)
+	{
+		char read_char;
+		int number = 0;
+		int spaces = 0;
+		int* ptr = array;
+
+		while (read(INPUT_FILE_DESCRIPTOR, (void*) &read_char, 1) != 0)
+		{
+			if (!spaces)
+			{
+				if (read_char == ' ')
+				{
+					*(ptr++) = number;
+					spaces = 1;
+					number = 0;
+				}
+				else
+				{
+					char temp[] = {read_char, '\0'};
+					number = number * 10 + atoi(temp);
+				}
+			}
+			else
+			{
+				if (read_char != ' ')
+				{
+					char temp[] = {read_char, '\0'};
+					number = number * 10 + atoi(temp);
+					spaces = 0;
+				}
+			}
+		}
+
+		*(ptr++) = number;
+	}
+	else
+	{
+		srand(time(0));
+
+		for (int i = 0; i < ARRAY_SIZE; i++)
+		{
+			*(array + i) = rand() % N;
+		}
+	}
+
+	return array;
+}
+
+void print_array(int* array)
+{
+	for (int i = 0; i < ARRAY_SIZE; i++)
+	{
+		printf("%d ", *(array + i));
+	}
+
+	printf("\n");
 }
 
 void scan_args(int argc, char** argv)
@@ -37,7 +116,7 @@ void scan_args(int argc, char** argv)
 	if (argc < 4)
 	{
 		print_usage(*argv);
-		exit(0);
+		my_exit(0);
 	}
 	else
 	{
@@ -76,12 +155,12 @@ void scan_args(int argc, char** argv)
 		if (ARRAY_SIZE == 0)
 		{
 			fprintf(stderr, "Error : bad value for <size of the array>. Exiting.\n");
-			exit(1);
+			my_exit(1);
 		}
 		if (argc >= 6 && N_THREADS == 0)
 		{
 			fprintf(stderr, "Error : bad value for [number of threads, otherwise the by default number]. Exiting.\n");
-			exit(1);
+			my_exit(1);
 		}
 	}
 }
@@ -95,7 +174,7 @@ int open_output_file(char* path)
 	if (fd < 0)
 	{
 		fprintf(stderr, "Error: an error occured trying to open or create the output file (errno=%d). Exiting.\n", errno);
-		exit(-1);
+		my_exit(-1);
 	}
 
 	return fd;
@@ -108,7 +187,7 @@ int open_input_file(char* path)
 	if (fd < 0)
 	{
 		fprintf(stderr, "Error: an error occured trying to open the input file (errno=%d). Exiting.\n", errno);
-		exit(-1);
+		my_exit(-1);
 	}
 
 	return fd;
@@ -116,7 +195,10 @@ int open_input_file(char* path)
 
 void close_file_descriptors()
 {
-	close(OUTPUT_FILE_DESCRIPTOR);
+	if (OUTPUT_FILE_DESCRIPTOR > 0)
+	{
+		close(OUTPUT_FILE_DESCRIPTOR);
+	}
 
 	if(INPUT_FILE_DESCRIPTOR > 0)
 	{
@@ -139,4 +221,10 @@ void print_args()
 		   N_THREADS,
 		   OUTPUT_FILE_DESCRIPTOR,
 		   INPUT_FILE_DESCRIPTOR);
+}
+
+void my_exit(int code)
+{
+	close_file_descriptors();
+	exit(code);
 }
