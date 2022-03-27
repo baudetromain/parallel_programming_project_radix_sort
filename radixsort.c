@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <time.h>
 #include <math.h>
+#include <sys/time.h>
 
 typedef struct array
 {
@@ -33,6 +34,7 @@ int* base2(int);
 Array* initialize_array();
 void scan_args(int, char**);
 int open_output_file(char*);
+void open_output_file_bis(char*);
 int open_input_file(char*);
 void close_file_descriptors();
 void print_usage(char*);
@@ -48,16 +50,25 @@ int N_THREADS = 0;
 
 int INPUT_FILE_DESCRIPTOR = -1;
 int OUTPUT_FILE_DESCRIPTOR = -1;
+FILE* output_file;
 
 
 int main(int argc, char** argv)
 {
+	struct timeval start, end;
+
 	scan_args(argc, argv);
-	print_args();
 
 	Array* array = initialize_array();
-	print_array(array);
+
+	gettimeofday(&start, NULL);
 	Array* sorted = radix_sort(array);
+	gettimeofday(&end, NULL);
+
+	long time_in_microseconds = ((end.tv_sec * 1000000 + end.tv_usec) - (start.tv_sec * 1000000 + start.tv_usec));
+
+	fprintf(output_file, "N=%d Size=%ld Threads=%d Time_in_microsec=%ld\n", N, ARRAY_SIZE, N_THREADS, time_in_microseconds);
+	print_array(array);
 	print_array(sorted);
 
 	close_file_descriptors();
@@ -324,9 +335,9 @@ void print_array(Array* array)
 {
 	for (int i = 0; i < array->size; i++)
 	{
-		printf("%d ", *(array->tab + i));
+		fprintf(output_file, "%d ", *(array->tab + i));
 	}
-	printf("\n");
+	fprintf(output_file, "\n");
 }
 
 Array* radix_sort(Array* array)
@@ -375,6 +386,7 @@ Array* split(Array* array, Array* flags)
 
 	Array* indexes = allocate_array(ARRAY_SIZE);
 
+#pragma omp parallel for
 	for (int i = 0; i < ARRAY_SIZE; i++)
 	{
 		if (*(flags->tab + i) == 1)
@@ -386,9 +398,6 @@ Array* split(Array* array, Array* flags)
 			*(indexes->tab + i) = *(iDown->tab + i);
 		}
 	}
-
-	printf("indexes: ");
-	print_array(indexes);
 
 	return permute(array, indexes);
 }
@@ -409,6 +418,7 @@ Array* minus(Array* array, int n)
 {
 	Array* minused = allocate_array(ARRAY_SIZE);
 
+#pragma omp parallel for
 	for(int i = 0; i < ARRAY_SIZE; i++)
 	{
 		*(minused->tab + i) = ARRAY_SIZE - *(array->tab + i);
@@ -421,6 +431,7 @@ Array* not(Array* flags)
 {
 	Array* array = allocate_array(ARRAY_SIZE);
 
+#pragma omp parallel for
 	for(int i = 0; i < ARRAY_SIZE; i++)
 	{
 		*(array->tab + i) = (*(flags->tab + i) == 1) ? 0 : 1;
@@ -537,7 +548,8 @@ void scan_args(int argc, char** argv)
 			INPUT_FILE_DESCRIPTOR = open_input_file(INPUT_FILE_NAME);
 		}
 
-		OUTPUT_FILE_DESCRIPTOR = open_output_file(OUTPUT_FILE_NAME);
+//		OUTPUT_FILE_DESCRIPTOR = open_output_file(OUTPUT_FILE_NAME);
+		open_output_file_bis(OUTPUT_FILE_NAME);
 
 		if (argc >= 6)
 		{
@@ -582,6 +594,11 @@ int open_output_file(char* path)
 	return fd;
 }
 
+void open_output_file_bis(char* path)
+{
+	output_file = fopen(path, "w");
+}
+
 int open_input_file(char* path)
 {
 	int fd = open(path, O_RDONLY);
@@ -606,6 +623,8 @@ void close_file_descriptors()
 	{
 		close(INPUT_FILE_DESCRIPTOR);
 	}
+
+	fclose(output_file);
 }
 
 void print_usage(char* cmd)
